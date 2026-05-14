@@ -26,9 +26,12 @@ let currentUser = null;
 auth.onAuthStateChanged(user => {
     currentUser = user;
     const authUi = document.getElementById('auth-ui');
+    const overlay = document.getElementById('login-overlay');
     if (user) {
+        if(overlay) overlay.style.display = 'none';
         authUi.innerHTML = `<span style="font-size:0.8rem; margin-right:10px; color:var(--txm)">${user.email}</span><button class="btn btn-ghost btn-sm" onclick="logout()">Salir</button>`;
     } else {
+        if(overlay) overlay.style.display = 'flex';
         authUi.innerHTML = `<button class="btn btn-ghost btn-sm" onclick="login()"><img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" style="width:14px; margin-right:6px; vertical-align:middle"> Iniciar Sesión</button>`;
     }
 });
@@ -95,73 +98,6 @@ function toast(msg, type = 'info') {
     t.textContent = msg;
     c.appendChild(t);
     setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 3000);
-}
-
-// ── PROJECT SAVE / LOAD ──
-function saveProject() {
-    const data = {
-        products,
-        imageBank,
-        nextId,
-        settings: {
-            title: document.getElementById('d-title').value,
-            subtitle: document.getElementById('d-subtitle').value,
-            priceLabel: document.getElementById('d-price-label').value,
-            footerNote: document.getElementById('d-footer-note').value,
-            cols: document.getElementById('d-cols').value,
-            theme: document.getElementById('d-theme').value,
-            showCode: document.getElementById('d-show-code').value,
-            showStock: document.getElementById('d-show-stock').value,
-            whatsapp: document.getElementById('d-whatsapp').value,
-            waText: document.getElementById('d-wa-text').value,
-            email: document.getElementById('d-email').value,
-            location: document.getElementById('d-location').value,
-            categoryOrder
-        }
-    };
-    const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Proyecto_HerraMax_${new Date().getTime()}.json`;
-    a.click();
-    toast('Proyecto guardado', 'success');
-}
-
-function loadProjectClick() { document.getElementById('file-load').click(); }
-
-function loadProject(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-        try {
-            const data = JSON.parse(evt.target.result);
-            products = data.products || [];
-            imageBank = data.imageBank || [];
-            nextId = data.nextId || 1;
-            categoryOrder = data.settings?.categoryOrder || [];
-            
-            if (data.settings) {
-                if(data.settings.title) document.getElementById('d-title').value = data.settings.title;
-                if(data.settings.subtitle) document.getElementById('d-subtitle').value = data.settings.subtitle;
-                if(data.settings.priceLabel) document.getElementById('d-price-label').value = data.settings.priceLabel;
-                if(data.settings.footerNote) document.getElementById('d-footer-note').value = data.settings.footerNote;
-                if(data.settings.cols) document.getElementById('d-cols').value = data.settings.cols;
-                if(data.settings.theme) document.getElementById('d-theme').value = data.settings.theme;
-                if(data.settings.showCode) document.getElementById('d-show-code').value = data.settings.showCode;
-                if(data.settings.showStock) document.getElementById('d-show-stock').value = data.settings.showStock;
-                if(data.settings.whatsapp) document.getElementById('d-whatsapp').value = data.settings.whatsapp;
-                if(data.settings.waText) document.getElementById('d-wa-text').value = data.settings.waText;
-                if(data.settings.email) document.getElementById('d-email').value = data.settings.email;
-                if(data.settings.location) document.getElementById('d-location').value = data.settings.location;
-            }
-            renderImgBank();
-            toast('Proyecto cargado', 'success');
-            goStep(2);
-        } catch (err) { toast('Error al leer el archivo', 'error'); }
-    };
-    reader.readAsText(file);
 }
 
 // ── CLOUD SAVE / LOAD ──
