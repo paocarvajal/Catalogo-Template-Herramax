@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generador de Catálogos | HerraMax Plus</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- ═══ TOP HEADER ═══ -->
+    <header class="app-header">
+        <div class="header-left">
+            <div class="logo-icon"><svg width="28" height="28" viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="8" fill="url(#g1)"/><path d="M8 16h16M16 8v16" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/><defs><linearGradient id="g1" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#FF8C00"/><stop offset="1" stop-color="#e65100"/></linearGradient></defs></svg></div>
+            <div><h1 class="header-title">Generador de Catálogos</h1><p class="header-sub">HerraMax Plus</p></div>
+        </div>
+        <div class="header-actions">
+            <button class="btn btn-ghost" onclick="loadDemo()">▶ Demo</button>
+        </div>
+    </header>
+
+    <!-- ═══ STEP PROGRESS BAR ═══ -->
+    <nav class="steps-bar">
+        <div class="step active" data-step="1"><span class="step-num">1</span><span class="step-label">Importar</span></div>
+        <div class="step-line"></div>
+        <div class="step" data-step="2"><span class="step-num">2</span><span class="step-label">Productos</span></div>
+        <div class="step-line"></div>
+        <div class="step" data-step="3"><span class="step-num">3</span><span class="step-label">Precios</span></div>
+        <div class="step-line"></div>
+        <div class="step" data-step="4"><span class="step-num">4</span><span class="step-label">Diseño</span></div>
+        <div class="step-line"></div>
+        <div class="step" data-step="5"><span class="step-num">5</span><span class="step-label">Generar</span></div>
+    </nav>
+
+    <!-- ═══ STEP 1: IMPORT ═══ -->
+    <section class="step-panel active" id="panel-1">
+        <div class="panel-inner">
+            <h2 class="panel-title">Paso 1 — Importar Datos</h2>
+            <p class="panel-desc">Sube tu archivo o pega datos. Acepta Excel (.xlsx/.xls), XML de factura CFDI, CSV o texto directo.</p>
+            <div class="import-grid">
+                <div class="import-card" onclick="document.getElementById('file-xls').click()">
+                    <div class="import-icon">📊</div>
+                    <h4>Subir Excel / CSV</h4>
+                    <p>Arrastra o selecciona tu archivo .xlsx, .xls o .csv</p>
+                    <input type="file" id="file-xls" accept=".xlsx,.xls,.csv" onchange="handleXLSUpload(event)" hidden>
+                </div>
+                <div class="import-card" onclick="document.getElementById('file-xml').click()">
+                    <div class="import-icon">📄</div>
+                    <h4>Subir XML (CFDI)</h4>
+                    <p>Importa desde factura XML. Toma costo unitario automáticamente.</p>
+                    <input type="file" id="file-xml" accept=".xml" onchange="handleXMLUpload(event)" hidden>
+                </div>
+                <div class="import-card" onclick="showPasteModal()">
+                    <div class="import-icon">📋</div>
+                    <h4>Pegar Datos</h4>
+                    <p>Copia y pega desde Excel o cualquier fuente de datos.</p>
+                </div>
+                <div class="import-card" onclick="goStep(2)">
+                    <div class="import-icon">✏️</div>
+                    <h4>Captura Manual</h4>
+                    <p>Agrega productos uno por uno directamente.</p>
+                </div>
+            </div>
+            <div id="import-preview" class="import-preview" style="display:none">
+                <h3>Vista previa de importación</h3>
+                <div class="preview-info"><span id="preview-count">0</span> productos detectados</div>
+                <div id="column-mapper" class="column-mapper"></div>
+                <div id="preview-table-wrap" class="preview-table-wrap"></div>
+                <div class="preview-actions">
+                    <button class="btn btn-primary" onclick="confirmImport()">✓ Confirmar e Importar</button>
+                    <button class="btn btn-ghost" onclick="cancelImport()">Cancelar</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══ STEP 2: PRODUCTS ═══ -->
+    <section class="step-panel" id="panel-2">
+        <div class="panel-inner wide">
+            <div class="step2-header">
+                <div>
+                    <h2 class="panel-title">Paso 2 — Revisar y Editar Productos</h2>
+                    <p class="panel-desc">Edita descripciones, asigna categorías, marca disponibilidad e imágenes. <span id="total-count-2">0</span> productos.</p>
+                </div>
+                <div class="step2-actions">
+                    <button class="btn btn-ghost" onclick="addEmptyProduct()">+ Agregar Producto</button>
+                    <button class="btn btn-ghost" onclick="selectAllProducts()"><input type="checkbox" id="select-all-cb" onchange="selectAllProducts()"> Seleccionar todos</button>
+                    <button class="btn btn-danger btn-sm" onclick="deleteSelected()" id="btn-delete-sel" style="display:none">🗑 Eliminar seleccionados</button>
+                </div>
+            </div>
+            <!-- Image bank floating -->
+            <div class="step2-layout">
+                <div class="products-editor" id="products-editor"></div>
+                <aside class="image-sidebar">
+                    <h4 class="sidebar-title">🖼 Banco de Imágenes</h4>
+                    <div class="img-drop" id="img-drop" ondrop="handleImgBankDrop(event)" ondragover="event.preventDefault()" ondragenter="this.classList.add('over')" ondragleave="this.classList.remove('over')" onclick="document.getElementById('img-bank-input').click()">
+                        <p>Arrastra imágenes aquí<br><span class="hint">o clic para seleccionar</span></p>
+                        <input type="file" id="img-bank-input" multiple accept="image/*" onchange="handleImgBankSelect(event)" hidden>
+                    </div>
+                    <div id="img-bank-grid" class="img-bank-grid"></div>
+                </aside>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══ STEP 3: PRICING ═══ -->
+    <section class="step-panel" id="panel-3">
+        <div class="panel-inner">
+            <h2 class="panel-title">Paso 3 — Configurar Precios</h2>
+            <p class="panel-desc">Define tu margen de utilidad. El precio final siempre mostrará IVA incluido.</p>
+            <div class="pricing-rule-box">
+                <h4>📐 Regla de Cálculo</h4>
+                <p class="rule-formula">Precio Final = (Costo Unitario + IVA 16%) × (1 + Utilidad%)</p>
+                <div class="rule-fields">
+                    <div class="rf">
+                        <label>% IVA</label>
+                        <input type="number" id="global-iva" class="field-input" value="16" min="0" max="30">
+                    </div>
+                    <div class="rf">
+                        <label>¿Costo ya incluye IVA?</label>
+                        <select id="cost-has-iva" class="field-input">
+                            <option value="no">No — el costo es sin IVA</option>
+                            <option value="yes">Sí — el costo ya tiene IVA</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="bulk-utility-bar">
+                <h4>Utilidad masiva</h4>
+                <div class="bulk-row">
+                    <button class="btn btn-ghost btn-sm" onclick="selectAllForPricing()">Seleccionar todos</button>
+                    <input type="number" id="bulk-utility" class="field-input inline" value="30" min="0" max="500" placeholder="%">
+                    <span>% utilidad</span>
+                    <button class="btn btn-primary btn-sm" onclick="applyBulkUtility()">Aplicar a seleccionados</button>
+                </div>
+            </div>
+            <div id="pricing-table" class="pricing-table"></div>
+        </div>
+    </section>
+
+    <!-- ═══ STEP 4: DESIGN ═══ -->
+    <section class="step-panel" id="panel-4">
+        <div class="panel-inner">
+            <h2 class="panel-title">Paso 4 — Diseño del Catálogo</h2>
+            <p class="panel-desc">Configura todos los campos visibles en el catálogo final.</p>
+            <div class="design-grid">
+                <div class="design-section">
+                    <h4>📝 Encabezado</h4>
+                    <label class="fl">Título del Catálogo</label>
+                    <input type="text" id="d-title" class="field-input" value="" placeholder="Ej: Catálogo Solvex">
+                    <label class="fl">Subtítulo</label>
+                    <input type="text" id="d-subtitle" class="field-input" value="Catálogo de Precios 2026" placeholder="Ej: Línea Premium 2026">
+                    <label class="fl">Etiqueta de Precio</label>
+                    <input type="text" id="d-price-label" class="field-input" value="PRECIO" placeholder="Ej: PRECIO ESPECIAL">
+                    <label class="fl">Nota al pie</label>
+                    <input type="text" id="d-footer-note" class="field-input" value="Precios con IVA incluido · Sujetos a cambio sin previo aviso" placeholder="Nota legal...">
+                </div>
+                <div class="design-section">
+                    <h4>🎨 Apariencia</h4>
+                    <label class="fl">Columnas</label>
+                    <select id="d-cols" class="field-input"><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option></select>
+                    <label class="fl">Tema</label>
+                    <select id="d-theme" class="field-input"><option value="light">Claro (imprimir)</option><option value="dark">Oscuro (digital)</option></select>
+                    <label class="fl">Mostrar código de producto</label>
+                    <select id="d-show-code" class="field-input"><option value="yes">Sí</option><option value="no" selected>No</option></select>
+                    <label class="fl">Mostrar indicador de stock</label>
+                    <select id="d-show-stock" class="field-input"><option value="yes" selected>Sí</option><option value="no">No</option></select>
+                </div>
+                <div class="design-section">
+                    <h4>📱 Contacto</h4>
+                    <label class="fl">Teléfono WhatsApp</label>
+                    <input type="text" id="d-whatsapp" class="field-input" value="" placeholder="5212345678901">
+                    <label class="fl">Texto del botón WhatsApp</label>
+                    <input type="text" id="d-wa-text" class="field-input" value="Pedir por WhatsApp" placeholder="Texto del botón">
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══ STEP 5: GENERATE ═══ -->
+    <section class="step-panel" id="panel-5">
+        <div class="panel-inner" style="text-align:center;">
+            <h2 class="panel-title">Paso 5 — Generar Catálogo</h2>
+            <p class="panel-desc">Revisa el resumen y genera tu catálogo profesional.</p>
+            <div id="gen-summary" class="gen-summary"></div>
+            <button class="btn btn-primary btn-lg" onclick="generateCatalog()">🚀 Generar Catálogo</button>
+            <p class="hint" style="margin-top:12px;">Se abrirá en nueva pestaña y se descargará como HTML.<br>Usa Ctrl+P en Chrome para exportar a PDF.</p>
+        </div>
+    </section>
+
+    <!-- ═══ BOTTOM NAV ═══ -->
+    <nav class="bottom-nav">
+        <button class="btn btn-ghost" id="btn-prev" onclick="prevStep()" style="visibility:hidden">← Anterior</button>
+        <span class="step-indicator" id="step-indicator">Paso 1 de 5</span>
+        <button class="btn btn-primary" id="btn-next" onclick="nextStep()">Siguiente →</button>
+    </nav>
+
+    <!-- ═══ PASTE MODAL ═══ -->
+    <div class="modal-overlay" id="paste-modal" style="display:none">
+        <div class="modal">
+            <div class="modal-header"><h3>Pegar Datos</h3><button class="modal-close" onclick="closePasteModal()">✕</button></div>
+            <p class="modal-desc">Pega datos desde Excel. Formato: <strong>Código | Descripción | Precio</strong> (separados por TAB)</p>
+            <textarea id="paste-area" class="paste-area" placeholder="Pega aquí tus datos..."></textarea>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="processPaste()">Procesar</button>
+                <button class="btn btn-ghost" onclick="closePasteModal()">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ TOAST ═══ -->
+    <div id="toasts" class="toasts"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>
