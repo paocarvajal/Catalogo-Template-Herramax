@@ -49,7 +49,7 @@
                     <div class="import-icon">📄</div>
                     <h4>Subir XML (CFDI)</h4>
                     <p>Importa desde factura XML. Toma costo unitario automáticamente.</p>
-                    <input type="file" id="file-xml" accept=".xml" onchange="handleXMLUpload(event)" hidden>
+                    <input type="file" id="file-xml" accept=".xml" multiple onchange="handleXMLUpload(event)" hidden>
                 </div>
                 <div class="import-card" onclick="showPasteModal()">
                     <div class="import-icon">📋</div>
@@ -168,11 +168,15 @@
                     <select id="d-show-stock" class="field-input"><option value="yes" selected>Sí</option><option value="no">No</option></select>
                 </div>
                 <div class="design-section">
-                    <h4>📱 Contacto</h4>
-                    <label class="fl">Teléfono WhatsApp</label>
-                    <input type="text" id="d-whatsapp" class="field-input" value="" placeholder="5212345678901">
+                    <h4>📱 Contacto y Contraportada</h4>
+                    <label class="fl">Email</label>
+                    <input type="text" id="d-email" class="field-input" value="herramaxplus@gmail.com" placeholder="Correo electrónico">
+                    <label class="fl">Teléfono / WhatsApp</label>
+                    <input type="text" id="d-whatsapp" class="field-input" value="55 5248 9231" placeholder="Teléfono de contacto">
                     <label class="fl">Texto del botón WhatsApp</label>
                     <input type="text" id="d-wa-text" class="field-input" value="Pedir por WhatsApp" placeholder="Texto del botón">
+                    <label class="fl">Ubicación</label>
+                    <input type="text" id="d-location" class="field-input" value="Puebla, México" placeholder="Ciudad, País">
                 </div>
             </div>
         </div>

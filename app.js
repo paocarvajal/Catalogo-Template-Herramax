@@ -144,34 +144,44 @@ function handleXLSUpload(e) {
 }
 
 function handleXMLUpload(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(evt.target.result, "text/xml");
-        const conceptos = xmlDoc.getElementsByTagName("cfdi:Concepto");
-        let imported = 0;
-        
-        for (let i = 0; i < conceptos.length; i++) {
-            const node = conceptos[i];
-            const desc = node.getAttribute("Descripcion");
-            const code = node.getAttribute("NoIdentificacion") || '';
-            const valUnitario = parseFloat(node.getAttribute("ValorUnitario")) || 0;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    
+    let imported = 0;
+    let processed = 0;
+    
+    for (let j = 0; j < files.length; j++) {
+        const file = files[j];
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(evt.target.result, "text/xml");
+            const conceptos = xmlDoc.getElementsByTagName("cfdi:Concepto");
             
-            if (desc) {
-                addProduct({ code, description: desc, baseCost: valUnitario });
-                imported++;
+            for (let i = 0; i < conceptos.length; i++) {
+                const node = conceptos[i];
+                const desc = node.getAttribute("Descripcion");
+                const code = node.getAttribute("NoIdentificacion") || '';
+                const valUnitario = parseFloat(node.getAttribute("ValorUnitario")) || 0;
+                
+                if (desc) {
+                    addProduct({ code, description: desc, baseCost: valUnitario });
+                    imported++;
+                }
             }
-        }
-        if (imported > 0) {
-            toast(`${imported} productos desde XML CFDI`, 'success');
-            nextStep();
-        } else {
-            toast('No se encontraron conceptos en el XML', 'error');
-        }
-    };
-    reader.readAsText(file);
+            
+            processed++;
+            if (processed === files.length) {
+                if (imported > 0) {
+                    toast(`${imported} productos desde XML CFDI`, 'success');
+                    nextStep();
+                } else {
+                    toast('No se encontraron conceptos en los XML', 'error');
+                }
+            }
+        };
+        reader.readAsText(file);
+    }
 }
 
 function addProduct(data) {
@@ -414,8 +424,11 @@ function generateCatalog() {
     const showStock = document.getElementById('d-show-stock').value === 'yes';
     const whatsapp = document.getElementById('d-whatsapp').value;
     const waText = document.getElementById('d-wa-text').value;
+    const email = document.getElementById('d-email').value || 'herramaxplus@gmail.com';
+    const location = document.getElementById('d-location').value || 'Puebla, México';
 
-    const today = new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
+    const today = new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' }).toUpperCase();
+    const vigencia = `VIGENCIA ${today}`;
 
     // Group by category
     const groups = {};
@@ -469,6 +482,8 @@ function generateCatalog() {
             ${esc(waText)}
           </a>` : '';
 
+    const logoUrl = "https://paocarvajal.github.io/Catalogo-Template-Herramax/1111%20Logo%20HerraMax%20Plus_Dig.jpg";
+
     const fullHtml = `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -503,23 +518,105 @@ function generateCatalog() {
         .cat-footer{text-align:center;margin-top:40px;padding-top:24px;border-top:2px solid var(--cat-border);}
         .cat-footer p{font-size:.82rem;color:var(--cat-muted);}
         .cat-whatsapp{display:inline-flex;align-items:center;gap:8px;margin-top:12px;padding:10px 24px;background:#25d366;color:#fff;border-radius:50px;font-weight:700;text-decoration:none;font-size:.9rem;}
-        @media print{@page{margin:.5cm;}.cat-card{box-shadow:none;border-color:#ccc}.cat-whatsapp{display:none;}}
-        @media(max-width:768px){.cat-grid{grid-template-columns:repeat(2,1fr);}}
+        
+        /* Cover and Backcover styles - White background for printing */
+        .cover-page, .backcover-page {
+            background-color: #ffffff;
+            color: #111827;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 40px;
+        }
+        .page-break { page-break-after: always; }
+        .cover-logo { max-width: 250px; margin-bottom: 40px; }
+        .cover-tag { font-size: 0.9rem; font-weight: 700; letter-spacing: 3px; color: var(--cat-primary); margin-bottom: 20px; text-transform: uppercase; border: 1px solid var(--cat-primary); padding: 8px 24px; border-radius: 30px; }
+        .cover-title { font-family: 'Outfit', sans-serif; font-size: 4.5rem; font-weight: 900; line-height: 1.1; margin-bottom: 16px; text-transform: uppercase; color: #111827; }
+        .cover-subtitle { font-family: 'Outfit', sans-serif; font-size: 1.2rem; font-weight: 500; letter-spacing: 4px; color: #4b5563; text-transform: uppercase; }
+        
+        .bc-box { border: 2px solid var(--cat-primary); padding: 12px 40px; margin-bottom: 30px; display: inline-block; }
+        .bc-title { font-family: 'Outfit', sans-serif; font-size: 3rem; font-weight: 800; color: var(--cat-primary); text-transform: uppercase; line-height: 1; }
+        .bc-subtitle { font-family: 'Outfit', sans-serif; font-size: 1.5rem; font-weight: 700; margin-bottom: 40px; text-transform: uppercase; color: #111827; }
+        .bc-divider { width: 100px; height: 3px; background-color: var(--cat-primary); margin: 30px auto; }
+        .bc-contact-title { font-size: 1.5rem; font-weight: 700; color: var(--cat-primary); margin-bottom: 20px; }
+        .bc-contact-info { font-size: 1.1rem; font-weight: 600; line-height: 2; margin-bottom: 30px; color: #111827; }
+        .bc-details { font-size: 0.9rem; color: #4b5563; line-height: 1.8; margin-bottom: 40px; font-weight: 500; }
+        .bc-location { color: var(--cat-primary); font-weight: 600; margin-bottom: 40px; }
+        .bc-vigencia { font-family: 'Outfit', sans-serif; font-size: 1.2rem; font-weight: 800; color: var(--cat-primary); margin-top: auto; }
+        .bc-copy { font-size: 0.75rem; color: #9ca3af; margin-top: 20px; }
+
+        @media print {
+            @page { margin: 0; }
+            body { background: white; }
+            .cat-container { padding: 2cm; max-width: none; }
+            .cat-card { box-shadow: none; border-color: #e5e7eb; }
+            .cat-whatsapp { display: none; }
+            .cover-page, .backcover-page { height: 100vh; padding: 2cm; }
+        }
+        @media (max-width: 768px) {
+            .cat-grid { grid-template-columns: repeat(2, 1fr); }
+            .cover-title { font-size: 3rem; }
+            .bc-title { font-size: 2rem; }
+        }
     </style>
 </head>
 <body>
+    <!-- PORTADA -->
+    <div class="cover-page page-break">
+        <img src="${logoUrl}" alt="HerraMax Plus" class="cover-logo">
+        <div class="cover-tag">✦ CATÁLOGO EXCLUSIVO MAYORISTAS ✦</div>
+        <div class="cover-title">${esc(title)}</div>
+        <div class="cover-subtitle">${esc(subtitle)}</div>
+    </div>
+
+    <!-- CONTENIDO -->
     <div class="cat-container">
         <div class="cat-header">
             <div class="cat-title">${esc(title)}</div>
             ${subtitle ? `<div class="cat-subtitle">${esc(subtitle)}</div>` : ''}
             <div class="cat-date">${today} · ${products.length} productos</div>
         </div>
+        
         <div class="cat-grid">${cardsHtml}</div>
+        
         <div class="cat-footer">
             <p>${esc(footerNote)}</p>
             <p style="margin-top:4px;">HerraMax Plus · Tu ferretería de confianza</p>
             ${whatsappHtml}
         </div>
+    </div>
+
+    <!-- CONTRAPORTADA -->
+    <div class="backcover-page" style="page-break-before: always;">
+        <img src="${logoUrl}" alt="HerraMax Plus" class="cover-logo" style="max-width: 180px; margin-bottom: 20px;">
+        <div class="bc-box">
+            <div class="bc-title">HERRAMAX PLUS</div>
+        </div>
+        <div class="bc-subtitle">TU MEJOR ALIADO</div>
+        
+        <div class="bc-divider"></div>
+        
+        <div class="bc-contact-title">CONTACTO</div>
+        <div class="bc-contact-info">
+            ${esc(email)}<br>
+            Tel / WhatsApp: ${esc(whatsapp)}
+        </div>
+        
+        <div class="bc-divider"></div>
+        
+        <div class="bc-details">
+            Venta exclusiva mayoreo<br>
+            Precios incluyen IVA<br>
+            Stock disponible inmediato
+        </div>
+        
+        <div class="bc-location">${esc(location)}</div>
+        
+        <div class="bc-vigencia">${vigencia}</div>
+        <div class="bc-copy">© ${new Date().getFullYear()} HerraMax Plus — Todos los derechos reservados</div>
     </div>
 </body>
 </html>`;
