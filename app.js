@@ -8,6 +8,37 @@ let nextId = 1;
 let currentStep = 1;
 let categoryOrder = [];
 
+// ── FIREBASE INIT ──
+const firebaseConfig = {
+  apiKey: "AIzaSyAa57ppjWFUcEdniw9WScABHssyACP3x3k",
+  authDomain: "compras-herramax.firebaseapp.com",
+  projectId: "compras-herramax",
+  storageBucket: "compras-herramax.firebasestorage.app",
+  messagingSenderId: "558573642669",
+  appId: "1:558573642669:web:b73b4cd1ef5917d416b724"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+const storage = firebase.storage();
+let currentUser = null;
+
+auth.onAuthStateChanged(user => {
+    currentUser = user;
+    const authUi = document.getElementById('auth-ui');
+    if (user) {
+        authUi.innerHTML = `<span style="font-size:0.8rem; margin-right:10px; color:var(--txm)">${user.email}</span><button class="btn btn-ghost btn-sm" onclick="logout()">Salir</button>`;
+    } else {
+        authUi.innerHTML = `<button class="btn btn-ghost btn-sm" onclick="login()"><img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" style="width:14px; margin-right:6px; vertical-align:middle"> Iniciar Sesión</button>`;
+    }
+});
+
+function login() {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    auth.signInWithPopup(provider).catch(err => toast('Error al iniciar sesión', 'error'));
+}
+function logout() { auth.signOut(); }
+
 document.addEventListener('DOMContentLoaded', () => {
     updateSteps();
 });
@@ -131,6 +162,134 @@ function loadProject(e) {
         } catch (err) { toast('Error al leer el archivo', 'error'); }
     };
     reader.readAsText(file);
+}
+
+// ── CLOUD SAVE / LOAD ──
+async function saveToCloud() {
+    if (!currentUser) { toast('Por favor, inicia sesión primero', 'error'); return; }
+    
+    let title = document.getElementById('d-title').value || 'Catálogo HerraMax';
+    const docData = {
+        title: title,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        products,
+        imageBank,
+        nextId,
+        settings: {
+            title: document.getElementById('d-title').value,
+            subtitle: document.getElementById('d-subtitle').value,
+            priceLabel: document.getElementById('d-price-label').value,
+            footerNote: document.getElementById('d-footer-note').value,
+            cols: document.getElementById('d-cols').value,
+            theme: document.getElementById('d-theme').value,
+            showCode: document.getElementById('d-show-code').value,
+            showStock: document.getElementById('d-show-stock').value,
+            whatsapp: document.getElementById('d-whatsapp').value,
+            waText: document.getElementById('d-wa-text').value,
+            email: document.getElementById('d-email').value,
+            location: document.getElementById('d-location').value,
+            categoryOrder
+        }
+    };
+
+    try {
+        toast('Guardando en la nube...', 'info');
+        if (!window.currentCatalogId) {
+            const ref = await db.collection('users').doc(currentUser.uid).collection('catalogs').add(docData);
+            window.currentCatalogId = ref.id;
+        } else {
+            await db.collection('users').doc(currentUser.uid).collection('catalogs').doc(window.currentCatalogId).set(docData);
+        }
+        toast('¡Catálogo guardado en la nube!', 'success');
+    } catch (e) {
+        console.error(e);
+        toast('Error al guardar en la nube', 'error');
+    }
+}
+
+async function showCloudProjects() {
+    if (!currentUser) { toast('Inicia sesión para ver tus catálogos', 'error'); return; }
+    const modal = document.getElementById('cloud-modal');
+    modal.style.display = 'flex';
+    const list = document.getElementById('cloud-list');
+    list.innerHTML = '<div style="padding:20px; text-align:center;">Cargando...</div>';
+    
+    try {
+        const snap = await db.collection('users').doc(currentUser.uid).collection('catalogs').orderBy('updatedAt', 'desc').get();
+        if (snap.empty) {
+            list.innerHTML = '<div style="padding:20px; text-align:center; color:var(--txm)">No tienes catálogos guardados.</div>';
+            return;
+        }
+        let html = '';
+        snap.forEach(doc => {
+            const data = doc.data();
+            const date = data.updatedAt ? data.updatedAt.toDate().toLocaleString() : 'Reciente';
+            html += `<div style="padding:12px; border-bottom:1px solid var(--bd); display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <strong>${data.title}</strong><br>
+                    <span style="font-size:0.8rem; color:var(--txm)">${data.products.length} productos | ${date}</span>
+                </div>
+                <div style="display:flex; gap:6px;">
+                    <button class="btn btn-primary btn-sm" onclick="loadFromCloud('${doc.id}')">Abrir</button>
+                    <button class="btn btn-danger btn-sm" onclick="deleteFromCloud('${doc.id}')">✕</button>
+                </div>
+            </div>`;
+        });
+        list.innerHTML = html;
+    } catch (e) {
+        console.error(e);
+        list.innerHTML = '<div style="padding:20px; text-align:center; color:var(--er)">Error al cargar catálogos.</div>';
+    }
+}
+
+function closeCloudModal() { document.getElementById('cloud-modal').style.display = 'none'; }
+
+async function loadFromCloud(docId) {
+    try {
+        toast('Cargando catálogo...', 'info');
+        const doc = await db.collection('users').doc(currentUser.uid).collection('catalogs').doc(docId).get();
+        if (doc.exists) {
+            const data = doc.data();
+            window.currentCatalogId = doc.id;
+            
+            products = data.products || [];
+            imageBank = data.imageBank || [];
+            nextId = data.nextId || 1;
+            categoryOrder = data.settings?.categoryOrder || [];
+            
+            if (data.settings) {
+                if(data.settings.title) document.getElementById('d-title').value = data.settings.title;
+                if(data.settings.subtitle) document.getElementById('d-subtitle').value = data.settings.subtitle;
+                if(data.settings.priceLabel) document.getElementById('d-price-label').value = data.settings.priceLabel;
+                if(data.settings.footerNote) document.getElementById('d-footer-note').value = data.settings.footerNote;
+                if(data.settings.cols) document.getElementById('d-cols').value = data.settings.cols;
+                if(data.settings.theme) document.getElementById('d-theme').value = data.settings.theme;
+                if(data.settings.showCode) document.getElementById('d-show-code').value = data.settings.showCode;
+                if(data.settings.showStock) document.getElementById('d-show-stock').value = data.settings.showStock;
+                if(data.settings.whatsapp) document.getElementById('d-whatsapp').value = data.settings.whatsapp;
+                if(data.settings.waText) document.getElementById('d-wa-text').value = data.settings.waText;
+                if(data.settings.email) document.getElementById('d-email').value = data.settings.email;
+                if(data.settings.location) document.getElementById('d-location').value = data.settings.location;
+            }
+            renderImgBank();
+            closeCloudModal();
+            toast('Proyecto cargado de la nube', 'success');
+            goStep(2);
+        }
+    } catch (e) {
+        console.error(e);
+        toast('Error al cargar', 'error');
+    }
+}
+
+async function deleteFromCloud(docId) {
+    if(!confirm('¿Estás seguro de eliminar este catálogo de la nube?')) return;
+    try {
+        await db.collection('users').doc(currentUser.uid).collection('catalogs').doc(docId).delete();
+        if(window.currentCatalogId === docId) window.currentCatalogId = null;
+        showCloudProjects();
+        toast('Catálogo eliminado', 'success');
+    } catch(e) { toast('Error al eliminar', 'error'); }
 }
 
 // ── TEMPLATE DOWNLOAD ──
@@ -367,21 +526,47 @@ function handleImgBankDrop(e) {
     e.currentTarget.classList.remove('over');
     processImgFiles(e.dataTransfer.files);
 }
-function processImgFiles(files) {
+async function processImgFiles(files) {
+    if (!currentUser) {
+        // Fallback to local base64
+        let count = 0;
+        Array.from(files).forEach(file => {
+            if (!file.type.startsWith('image/')) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                imageBank.push({ id: nextId++, data: e.target.result, name: file.name });
+                count++;
+                if (count === Array.from(files).length) {
+                    renderImgBank();
+                    toast(`${count} imágenes cargadas (Local)`, 'success');
+                }
+            };
+            reader.readAsDataURL(file);
+        });
+        return;
+    }
+    
+    toast(`Subiendo ${files.length} imágenes a la nube...`, 'info');
     let count = 0;
-    Array.from(files).forEach(file => {
+    const uploadTasks = Array.from(files).map(async file => {
         if (!file.type.startsWith('image/')) return;
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            imageBank.push({ id: nextId++, data: e.target.result, name: file.name });
+        try {
+            const path = `catalogs/${currentUser.uid}/images/${Date.now()}_${file.name}`;
+            const ref = storage.ref(path);
+            await ref.put(file);
+            const url = await ref.getDownloadURL();
+            imageBank.push({ id: nextId++, data: url, name: file.name });
             count++;
-            if (count === Array.from(files).length) {
-                renderImgBank();
-                toast(`${count} imágenes cargadas`, 'success');
-            }
-        };
-        reader.readAsDataURL(file);
+        } catch (err) { console.error("Error upload:", err); }
     });
+    
+    try {
+        await Promise.all(uploadTasks);
+        renderImgBank();
+        toast(`${count} imágenes guardadas en la nube`, 'success');
+    } catch (e) {
+        toast('Hubo un error subiendo algunas imágenes', 'error');
+    }
 }
 function renderImgBank() {
     const search = document.getElementById('img-search').value.toLowerCase();
