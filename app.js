@@ -463,16 +463,18 @@ function handleImgBankDrop(e) {
     processImgFiles(e.dataTransfer.files);
 }
 async function processImgFiles(files) {
+    const validFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+    if (validFiles.length === 0) return;
+
     if (!currentUser) {
         // Fallback to local base64
         let count = 0;
-        Array.from(files).forEach(file => {
-            if (!file.type.startsWith('image/')) return;
+        validFiles.forEach(file => {
             const reader = new FileReader();
             reader.onload = (e) => {
                 imageBank.push({ id: nextId++, data: e.target.result, name: file.name });
                 count++;
-                if (count === Array.from(files).length) {
+                if (count === validFiles.length) {
                     renderImgBank();
                     toast(`${count} imágenes cargadas (Local)`, 'success');
                 }
@@ -482,26 +484,41 @@ async function processImgFiles(files) {
         return;
     }
     
-    toast(`Subiendo ${files.length} imágenes a la nube...`, 'info');
-    let count = 0;
-    const uploadTasks = Array.from(files).map(async file => {
-        if (!file.type.startsWith('image/')) return;
-        try {
-            const path = `catalogs/${currentUser.uid}/images/${Date.now()}_${file.name}`;
-            const ref = storage.ref(path);
-            await ref.put(file);
-            const url = await ref.getDownloadURL();
-            imageBank.push({ id: nextId++, data: url, name: file.name });
-            count++;
-        } catch (err) { console.error("Error upload:", err); }
+    toast(`Procesando ${validFiles.length} imágenes...`, 'info');
+    let countCloud = 0;
+    let countLocal = 0;
+    
+    const uploadTasks = validFiles.map(file => {
+        return new Promise(async (resolve) => {
+            try {
+                const path = `catalogs/${currentUser.uid}/images/${Date.now()}_${file.name}`;
+                const ref = storage.ref(path);
+                await ref.put(file);
+                const url = await ref.getDownloadURL();
+                imageBank.push({ id: nextId++, data: url, name: file.name });
+                countCloud++;
+                resolve();
+            } catch (err) { 
+                console.error("Error upload:", err); 
+                // Fallback to local base64 if cloud upload fails
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    imageBank.push({ id: nextId++, data: e.target.result, name: file.name });
+                    countLocal++;
+                    resolve();
+                };
+                reader.onerror = resolve;
+                reader.readAsDataURL(file);
+            }
+        });
     });
     
-    try {
-        await Promise.all(uploadTasks);
-        renderImgBank();
-        toast(`${count} imágenes guardadas en la nube`, 'success');
-    } catch (e) {
-        toast('Hubo un error subiendo algunas imágenes', 'error');
+    await Promise.all(uploadTasks);
+    renderImgBank();
+    if (countLocal > 0) {
+        toast(`${countCloud} en nube, ${countLocal} locales`, 'warn');
+    } else {
+        toast(`${countCloud} imágenes guardadas en la nube`, 'success');
     }
 }
 function renderImgBank() {
@@ -524,7 +541,8 @@ function autoAssignImages() {
     products.forEach(p => {
         if (p.code && !p.imageData) {
             const match = imageBank.find(img => {
-                const nameWithoutExt = img.name.substring(0, img.name.lastIndexOf('.')) || img.name;
+                let nameWithoutExt = img.name.substring(0, img.name.lastIndexOf('.')) || img.name;
+                nameWithoutExt = nameWithoutExt.replace(/_\d+$/, ''); // Remove _1, _2 from duplicates
                 return nameWithoutExt.toLowerCase() === p.code.toLowerCase();
             });
             if (match) { p.imageData = match.data; assigned++; }
