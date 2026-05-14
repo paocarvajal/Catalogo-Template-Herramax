@@ -16,6 +16,9 @@
             <div><h1 class="header-title">Generador de Catálogos</h1><p class="header-sub">HerraMax Plus</p></div>
         </div>
         <div class="header-actions">
+            <button class="btn btn-ghost" onclick="loadProjectClick()" title="Cargar proyecto (.json)">📂 Cargar</button>
+            <input type="file" id="file-load" accept=".json" onchange="loadProject(event)" hidden>
+            <button class="btn btn-primary" onclick="saveProject()" title="Guardar proyecto localmente">💾 Guardar</button>
             <button class="btn btn-ghost" onclick="loadDemo()">▶ Demo</button>
         </div>
     </header>
@@ -44,6 +47,7 @@
                     <h4>Subir Excel / CSV</h4>
                     <p>Arrastra o selecciona tu archivo .xlsx, .xls o .csv</p>
                     <input type="file" id="file-xls" accept=".xlsx,.xls,.csv" onchange="handleXLSUpload(event)" hidden>
+                    <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="event.stopPropagation(); downloadTemplate()">📥 Descargar Plantilla</button>
                 </div>
                 <div class="import-card" onclick="document.getElementById('file-xml').click()">
                     <div class="import-icon">📄</div>
@@ -81,19 +85,37 @@
             <div class="step2-header">
                 <div>
                     <h2 class="panel-title">Paso 2 — Revisar y Editar Productos</h2>
-                    <p class="panel-desc">Edita descripciones, asigna categorías, marca disponibilidad e imágenes. <span id="total-count-2">0</span> productos.</p>
+                    <p class="panel-desc">Edita descripciones, asigna categorías, marca y disponibilidad. <span id="total-count-2">0</span> productos.</p>
                 </div>
                 <div class="step2-actions">
                     <button class="btn btn-ghost" onclick="addEmptyProduct()">+ Agregar Producto</button>
-                    <button class="btn btn-ghost" onclick="selectAllProducts()"><input type="checkbox" id="select-all-cb" onchange="selectAllProducts()"> Seleccionar todos</button>
-                    <button class="btn btn-danger btn-sm" onclick="deleteSelected()" id="btn-delete-sel" style="display:none">🗑 Eliminar seleccionados</button>
                 </div>
             </div>
+            
+            <!-- Bulk actions -->
+            <div class="bulk-action-bar">
+                <div class="bulk-row">
+                    <label><input type="checkbox" id="select-all-cb" onchange="selectAllProducts()"> <strong>Seleccionar todos</strong></label>
+                    <span class="divider">|</span>
+                    <input type="text" id="bulk-brand" class="field-input inline" placeholder="Marca (ej. Solvex)">
+                    <button class="btn btn-secondary btn-sm" onclick="applyBulk('brand')">Aplicar Marca</button>
+                    <span class="divider">|</span>
+                    <input type="text" id="bulk-cat" class="field-input inline" placeholder="Categoría">
+                    <button class="btn btn-secondary btn-sm" onclick="applyBulk('category')">Aplicar Categoría</button>
+                    <span class="divider">|</span>
+                    <button class="btn btn-danger btn-sm" onclick="deleteSelected()" id="btn-delete-sel" style="display:none">🗑 Eliminar</button>
+                </div>
+            </div>
+
             <!-- Image bank floating -->
             <div class="step2-layout">
                 <div class="products-editor" id="products-editor"></div>
                 <aside class="image-sidebar">
-                    <h4 class="sidebar-title">🖼 Banco de Imágenes</h4>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                        <h4 class="sidebar-title" style="margin:0">🖼 Banco de Imágenes</h4>
+                        <button class="btn btn-primary btn-sm" onclick="autoAssignImages()" title="Asignar a códigos exactos">🪄 Auto Asignar</button>
+                    </div>
+                    <input type="text" id="img-search" class="field-input" placeholder="🔍 Buscar imagen por nombre..." onkeyup="renderImgBank()" style="margin-bottom:10px;">
                     <div class="img-drop" id="img-drop" ondrop="handleImgBankDrop(event)" ondragover="event.preventDefault()" ondragenter="this.classList.add('over')" ondragleave="this.classList.remove('over')" onclick="document.getElementById('img-bank-input').click()">
                         <p>Arrastra imágenes aquí<br><span class="hint">o clic para seleccionar</span></p>
                         <input type="file" id="img-bank-input" multiple accept="image/*" onchange="handleImgBankSelect(event)" hidden>
@@ -141,7 +163,7 @@
 
     <!-- ═══ STEP 4: DESIGN ═══ -->
     <section class="step-panel" id="panel-4">
-        <div class="panel-inner">
+        <div class="panel-inner wide">
             <h2 class="panel-title">Paso 4 — Diseño del Catálogo</h2>
             <p class="panel-desc">Configura todos los campos visibles en el catálogo final.</p>
             <div class="design-grid">
@@ -177,6 +199,11 @@
                     <input type="text" id="d-wa-text" class="field-input" value="Pedir por WhatsApp" placeholder="Texto del botón">
                     <label class="fl">Ubicación</label>
                     <input type="text" id="d-location" class="field-input" value="Puebla, México" placeholder="Ciudad, País">
+                </div>
+                <div class="design-section">
+                    <h4>📑 Orden de Categorías</h4>
+                    <p class="hint">Arrastra para reordenar o renombra como aparecerán.</p>
+                    <div id="category-order-list" class="cat-order-list"></div>
                 </div>
             </div>
         </div>

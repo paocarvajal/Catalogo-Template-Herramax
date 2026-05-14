@@ -1,17 +1,17 @@
 /* ═══════════════════════════════════════════════════
-   HerraMax Plus — Catalog Generator Engine V2
+   HerraMax Plus — Catalog Generator Engine V3
    ═══════════════════════════════════════════════════ */
 
 let products = [];
 let imageBank = [];
 let nextId = 1;
 let currentStep = 1;
+let categoryOrder = [];
 
 document.addEventListener('DOMContentLoaded', () => {
     updateSteps();
 });
 
-// ── Navigation ──
 function nextStep() {
     if (currentStep < 5) {
         currentStep++;
@@ -30,19 +30,16 @@ function goStep(step) {
 }
 
 function updateSteps() {
-    // Update top bar
     document.querySelectorAll('.step').forEach(el => {
         const s = parseInt(el.dataset.step);
         el.classList.toggle('active', s === currentStep);
         el.classList.toggle('done', s < currentStep);
     });
 
-    // Update panels
     document.querySelectorAll('.step-panel').forEach(el => {
         el.classList.toggle('active', el.id === 'panel-' + currentStep);
     });
 
-    // Update bottom nav
     document.getElementById('step-indicator').textContent = `Paso ${currentStep} de 5`;
     document.getElementById('btn-prev').style.visibility = currentStep === 1 ? 'hidden' : 'visible';
     
@@ -54,13 +51,12 @@ function updateSteps() {
         btnNext.textContent = 'Siguiente →';
     }
 
-    // specific renders
     if (currentStep === 2) renderProductsEditor();
     if (currentStep === 3) renderPricingTable();
+    if (currentStep === 4) renderCategoryOrder();
     if (currentStep === 5) renderSummary();
 }
 
-// ── Toasts ──
 function toast(msg, type = 'info') {
     const c = document.getElementById('toasts');
     const t = document.createElement('div');
@@ -68,6 +64,82 @@ function toast(msg, type = 'info') {
     t.textContent = msg;
     c.appendChild(t);
     setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 3000);
+}
+
+// ── PROJECT SAVE / LOAD ──
+function saveProject() {
+    const data = {
+        products,
+        imageBank,
+        nextId,
+        settings: {
+            title: document.getElementById('d-title').value,
+            subtitle: document.getElementById('d-subtitle').value,
+            priceLabel: document.getElementById('d-price-label').value,
+            footerNote: document.getElementById('d-footer-note').value,
+            cols: document.getElementById('d-cols').value,
+            theme: document.getElementById('d-theme').value,
+            showCode: document.getElementById('d-show-code').value,
+            showStock: document.getElementById('d-show-stock').value,
+            whatsapp: document.getElementById('d-whatsapp').value,
+            waText: document.getElementById('d-wa-text').value,
+            email: document.getElementById('d-email').value,
+            location: document.getElementById('d-location').value,
+            categoryOrder
+        }
+    };
+    const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Proyecto_HerraMax_${new Date().getTime()}.json`;
+    a.click();
+    toast('Proyecto guardado', 'success');
+}
+
+function loadProjectClick() { document.getElementById('file-load').click(); }
+
+function loadProject(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+        try {
+            const data = JSON.parse(evt.target.result);
+            products = data.products || [];
+            imageBank = data.imageBank || [];
+            nextId = data.nextId || 1;
+            categoryOrder = data.settings?.categoryOrder || [];
+            
+            if (data.settings) {
+                if(data.settings.title) document.getElementById('d-title').value = data.settings.title;
+                if(data.settings.subtitle) document.getElementById('d-subtitle').value = data.settings.subtitle;
+                if(data.settings.priceLabel) document.getElementById('d-price-label').value = data.settings.priceLabel;
+                if(data.settings.footerNote) document.getElementById('d-footer-note').value = data.settings.footerNote;
+                if(data.settings.cols) document.getElementById('d-cols').value = data.settings.cols;
+                if(data.settings.theme) document.getElementById('d-theme').value = data.settings.theme;
+                if(data.settings.showCode) document.getElementById('d-show-code').value = data.settings.showCode;
+                if(data.settings.showStock) document.getElementById('d-show-stock').value = data.settings.showStock;
+                if(data.settings.whatsapp) document.getElementById('d-whatsapp').value = data.settings.whatsapp;
+                if(data.settings.waText) document.getElementById('d-wa-text').value = data.settings.waText;
+                if(data.settings.email) document.getElementById('d-email').value = data.settings.email;
+                if(data.settings.location) document.getElementById('d-location').value = data.settings.location;
+            }
+            renderImgBank();
+            toast('Proyecto cargado', 'success');
+            goStep(2);
+        } catch (err) { toast('Error al leer el archivo', 'error'); }
+    };
+    reader.readAsText(file);
+}
+
+// ── TEMPLATE DOWNLOAD ──
+function downloadTemplate() {
+    const ws_data = [['Código', 'Descripción', 'Precio Base', 'Marca', 'Categoría']];
+    const ws = XLSX.utils.aoa_to_sheet(ws_data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Productos");
+    XLSX.writeFile(wb, "Plantilla_HerraMax.xlsx");
 }
 
 // ── STEP 1: IMPORT ──
@@ -96,21 +168,15 @@ function processPaste() {
                 } else {
                     desc = parts[0];
                 }
-            } else {
-                desc = parts.join(' ');
-            }
+            } else { desc = parts.join(' '); }
             if (desc) {
                 addProduct({ code, description: desc, baseCost: price });
                 imported++;
             }
         }
     });
-    
     closePasteModal();
-    if (imported > 0) {
-        toast(`${imported} productos importados`, 'success');
-        nextStep();
-    }
+    if (imported > 0) { toast(`${imported} productos importados`, 'success'); nextStep(); }
 }
 
 function handleXLSUpload(e) {
@@ -124,21 +190,21 @@ function handleXLSUpload(e) {
         const rows = XLSX.utils.sheet_to_json(firstSheet, {header: 1});
         
         let imported = 0;
-        rows.forEach(row => {
+        rows.forEach((row, idx) => {
+            if(idx === 0) return; // skip header
             if (row.length >= 2) {
                 const code = row[0] || '';
                 const desc = row[1] || '';
                 const price = parseFloat(row[2]) || 0;
+                const brand = row[3] || '';
+                const cat = row[4] || '';
                 if (desc) {
-                    addProduct({ code: String(code), description: String(desc), baseCost: price });
+                    addProduct({ code: String(code), description: String(desc), baseCost: price, brand: String(brand), category: String(cat) });
                     imported++;
                 }
             }
         });
-        if (imported > 0) {
-            toast(`${imported} productos desde Excel`, 'success');
-            nextStep();
-        }
+        if (imported > 0) { toast(`${imported} productos desde Excel`, 'success'); nextStep(); }
     };
     reader.readAsArrayBuffer(file);
 }
@@ -146,9 +212,7 @@ function handleXLSUpload(e) {
 function handleXMLUpload(e) {
     const files = e.target.files;
     if (!files || files.length === 0) return;
-    
-    let imported = 0;
-    let processed = 0;
+    let imported = 0, processed = 0;
     
     for (let j = 0; j < files.length; j++) {
         const file = files[j];
@@ -163,7 +227,6 @@ function handleXMLUpload(e) {
                 const desc = node.getAttribute("Descripcion");
                 const code = node.getAttribute("NoIdentificacion") || '';
                 const valUnitario = parseFloat(node.getAttribute("ValorUnitario")) || 0;
-                
                 if (desc) {
                     addProduct({ code, description: desc, baseCost: valUnitario });
                     imported++;
@@ -172,12 +235,8 @@ function handleXMLUpload(e) {
             
             processed++;
             if (processed === files.length) {
-                if (imported > 0) {
-                    toast(`${imported} productos desde XML CFDI`, 'success');
-                    nextStep();
-                } else {
-                    toast('No se encontraron conceptos en los XML', 'error');
-                }
+                if (imported > 0) { toast(`${imported} productos desde XML CFDI`, 'success'); nextStep(); } 
+                else { toast('No se encontraron conceptos', 'error'); }
             }
         };
         reader.readAsText(file);
@@ -189,14 +248,16 @@ function addProduct(data) {
         id: nextId++,
         code: data.code || '',
         description: data.description || '',
+        brand: data.brand || '',
         category: data.category || '',
         baseCost: data.baseCost || 0,
-        utilityPct: 30, // Default utility
-        manualPrice: false, // For products without price
-        stockStatus: 'instock', // 'instock', 'order'
+        utilityPct: 30, 
+        manualPrice: false,
+        stockStatus: 'instock',
         imageData: data.imageData || null,
         selected: false
     });
+    updateCategoryOrderData();
 }
 
 function addEmptyProduct() {
@@ -231,13 +292,16 @@ function renderProductsEditor() {
             
             <div class="pe-fields">
                 <input type="text" class="pe-code" onchange="updateProd(${p.id}, 'code', this.value)" value="${p.code}" placeholder="Código">
-                <input type="text" class="pe-cat" onchange="updateProd(${p.id}, 'category', this.value)" value="${p.category}" placeholder="Categoría">
+                <input type="text" class="pe-brand" onchange="updateProd(${p.id}, 'brand', this.value)" value="${p.brand}" placeholder="Marca (Solvex...)">
             </div>
             
-            <select class="pe-stock" onchange="updateProd(${p.id}, 'stockStatus', this.value)">
-                <option value="instock" ${p.stockStatus === 'instock' ? 'selected' : ''}>En stock</option>
-                <option value="order" ${p.stockStatus === 'order' ? 'selected' : ''}>Bajo pedido</option>
-            </select>
+            <div class="pe-fields">
+                <input type="text" class="pe-cat" onchange="updateProd(${p.id}, 'category', this.value)" value="${p.category}" placeholder="Categoría">
+                <select class="pe-stock" onchange="updateProd(${p.id}, 'stockStatus', this.value)">
+                    <option value="instock" ${p.stockStatus === 'instock' ? 'selected' : ''}>En stock</option>
+                    <option value="order" ${p.stockStatus === 'order' ? 'selected' : ''}>Bajo pedido</option>
+                </select>
+            </div>
             
             <button class="pe-del" onclick="deleteProduct(${p.id})">✕</button>
         </div>
@@ -248,20 +312,21 @@ function renderProductsEditor() {
 
 function updateProd(id, field, value) {
     const p = products.find(x => x.id === id);
-    if (p) p[field] = value;
+    if (p) {
+        p[field] = value;
+        if(field === 'category') updateCategoryOrderData();
+    }
 }
 
 function deleteProduct(id) {
     products = products.filter(p => p.id !== id);
+    updateCategoryOrderData();
     renderProductsEditor();
 }
 
 function toggleSelect(id) {
     const p = products.find(x => x.id === id);
-    if (p) {
-        p.selected = !p.selected;
-        renderProductsEditor();
-    }
+    if (p) { p.selected = !p.selected; renderProductsEditor(); }
 }
 
 function selectAllProducts() {
@@ -273,6 +338,7 @@ function selectAllProducts() {
 
 function deleteSelected() {
     products = products.filter(p => !p.selected);
+    updateCategoryOrderData();
     renderProductsEditor();
 }
 
@@ -280,6 +346,18 @@ function updateDeleteBtn() {
     const hasSel = products.some(p => p.selected);
     const btn = document.getElementById('btn-delete-sel');
     if(btn) btn.style.display = hasSel ? 'inline-flex' : 'none';
+}
+
+function applyBulk(field) {
+    const val = document.getElementById(`bulk-${field === 'brand' ? 'brand' : 'cat'}`).value.trim();
+    if (!val) { toast(`Escribe un valor para la ${field === 'brand' ? 'marca' : 'categoría'}`, 'error'); return; }
+    let count = 0;
+    products.forEach(p => {
+        if (p.selected) { p[field] = val; count++; }
+    });
+    if (field === 'category') updateCategoryOrderData();
+    renderProductsEditor();
+    toast(`${count} actualizados`, 'success');
 }
 
 // ── IMAGE BANK ──
@@ -290,19 +368,26 @@ function handleImgBankDrop(e) {
     processImgFiles(e.dataTransfer.files);
 }
 function processImgFiles(files) {
+    let count = 0;
     Array.from(files).forEach(file => {
         if (!file.type.startsWith('image/')) return;
         const reader = new FileReader();
         reader.onload = (e) => {
             imageBank.push({ id: nextId++, data: e.target.result, name: file.name });
-            renderImgBank();
+            count++;
+            if (count === Array.from(files).length) {
+                renderImgBank();
+                toast(`${count} imágenes cargadas`, 'success');
+            }
         };
         reader.readAsDataURL(file);
     });
 }
 function renderImgBank() {
-    document.getElementById('img-bank-grid').innerHTML = imageBank.map(img => `
-        <div class="bank-img" draggable="true" ondragstart="event.dataTransfer.setData('text/plain', '${img.id}')">
+    const search = document.getElementById('img-search').value.toLowerCase();
+    const filtered = imageBank.filter(img => img.name.toLowerCase().includes(search));
+    document.getElementById('img-bank-grid').innerHTML = filtered.map(img => `
+        <div class="bank-img" draggable="true" ondragstart="event.dataTransfer.setData('text/plain', '${img.id}')" title="${esc(img.name)}">
             <img src="${img.data}" alt="">
         </div>
     `).join('');
@@ -311,17 +396,26 @@ function dropImage(e, prodId) {
     e.preventDefault();
     const imgId = parseInt(e.dataTransfer.getData('text/plain'));
     const img = imageBank.find(i => i.id === imgId);
-    if (img) {
-        updateProd(prodId, 'imageData', img.data);
-        renderProductsEditor();
-    }
+    if (img) { updateProd(prodId, 'imageData', img.data); renderProductsEditor(); }
+}
+function autoAssignImages() {
+    let assigned = 0;
+    products.forEach(p => {
+        if (p.code && !p.imageData) {
+            const match = imageBank.find(img => {
+                const nameWithoutExt = img.name.substring(0, img.name.lastIndexOf('.')) || img.name;
+                return nameWithoutExt.toLowerCase() === p.code.toLowerCase();
+            });
+            if (match) { p.imageData = match.data; assigned++; }
+        }
+    });
+    if (assigned > 0) { renderProductsEditor(); toast(`${assigned} imágenes asignadas auto.`, 'success'); } 
+    else { toast('No se encontraron coincidencias', 'error'); }
 }
 
 // ── STEP 3: PRICING ──
 function renderPricingTable() {
     const container = document.getElementById('pricing-table');
-    
-    // Header
     let html = `
         <div class="pt-row pt-header">
             <div></div>
@@ -332,7 +426,6 @@ function renderPricingTable() {
             <div>PRECIO FINAL</div>
         </div>
     `;
-    
     html += products.map(p => {
         const finalPrice = calculateFinalPrice(p);
         return `
@@ -340,9 +433,7 @@ function renderPricingTable() {
             <input type="checkbox" class="pt-check" ${p.selected ? 'checked' : ''} onchange="toggleSelectPrice(${p.id})">
             <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${p.description}">${p.description}</div>
             <div class="pt-cost">$${p.baseCost.toFixed(2)}</div>
-            <div>
-                <input type="number" class="pt-util-input" value="${p.utilityPct}" onchange="updateProdPrice(${p.id}, 'utilityPct', this.value)" ${p.manualPrice ? 'disabled' : ''}>
-            </div>
+            <div><input type="number" class="pt-util-input" value="${p.utilityPct}" onchange="updateProdPrice(${p.id}, 'utilityPct', this.value)" ${p.manualPrice ? 'disabled' : ''}></div>
             <div class="pt-no-price">
                 <input type="checkbox" id="man-${p.id}" ${p.manualPrice ? 'checked' : ''} onchange="updateProdPrice(${p.id}, 'manualPrice', this.checked)">
                 <label for="man-${p.id}">Sin precio</label>
@@ -350,43 +441,26 @@ function renderPricingTable() {
             <div class="pt-final">${p.manualPrice ? '___' : '$' + finalPrice.toFixed(2)}</div>
         </div>
     `}).join('');
-    
     container.innerHTML = html;
 }
-
 function toggleSelectPrice(id) {
     const p = products.find(x => x.id === id);
-    if (p) {
-        p.selected = !p.selected;
-        renderPricingTable();
-    }
+    if (p) { p.selected = !p.selected; renderPricingTable(); }
 }
-
-function selectAllForPricing() {
-    products.forEach(p => p.selected = true);
-    renderPricingTable();
-}
-
+function selectAllForPricing() { products.forEach(p => p.selected = true); renderPricingTable(); }
 function applyBulkUtility() {
     const util = parseFloat(document.getElementById('bulk-utility').value) || 0;
-    products.forEach(p => {
-        if (p.selected && !p.manualPrice) {
-            p.utilityPct = util;
-        }
-    });
+    products.forEach(p => { if (p.selected && !p.manualPrice) p.utilityPct = util; });
     renderPricingTable();
     toast(`Utilidad aplicada`, 'success');
 }
-
 function updateProdPrice(id, field, value) {
     const p = products.find(x => x.id === id);
     if (p) {
-        if (field === 'utilityPct') p[field] = parseFloat(value) || 0;
-        else p[field] = value;
+        if (field === 'utilityPct') p[field] = parseFloat(value) || 0; else p[field] = value;
         renderPricingTable();
     }
 }
-
 document.getElementById('global-iva').addEventListener('change', renderPricingTable);
 document.getElementById('cost-has-iva').addEventListener('change', renderPricingTable);
 
@@ -394,12 +468,56 @@ function calculateFinalPrice(p) {
     let cost = p.baseCost;
     const globalIva = parseFloat(document.getElementById('global-iva').value) || 0;
     const costHasIva = document.getElementById('cost-has-iva').value === 'yes';
-    
-    if (!costHasIva && globalIva > 0) {
-        cost = cost * (1 + (globalIva / 100));
-    }
-    
+    if (!costHasIva && globalIva > 0) cost = cost * (1 + (globalIva / 100));
     return cost * (1 + (p.utilityPct / 100));
+}
+
+// ── STEP 4: CATEGORY ORDERING ──
+function updateCategoryOrderData() {
+    const currentCats = [...new Set(products.map(p => p.category || 'Sin Categoría'))];
+    // Add new ones
+    currentCats.forEach(c => {
+        if (!categoryOrder.find(x => x.original === c)) {
+            categoryOrder.push({ original: c, label: c });
+        }
+    });
+    // Remove unused
+    categoryOrder = categoryOrder.filter(x => currentCats.includes(x.original));
+}
+
+let draggedItem = null;
+function renderCategoryOrder() {
+    updateCategoryOrderData();
+    const container = document.getElementById('category-order-list');
+    container.innerHTML = categoryOrder.map((c, idx) => {
+        const count = products.filter(p => (p.category || 'Sin Categoría') === c.original).length;
+        return `
+        <div class="cat-order-item" draggable="true" data-index="${idx}">
+            <div class="cat-drag-handle">☰</div>
+            <input type="text" class="cat-order-input" value="${c.label}" onchange="updateCatLabel(${idx}, this.value)">
+            <span class="cat-order-count">${count} prod.</span>
+        </div>
+    `}).join('');
+
+    const items = container.querySelectorAll('.cat-order-item');
+    items.forEach(item => {
+        item.addEventListener('dragstart', (e) => { draggedItem = item; setTimeout(() => item.style.display = 'none', 0); });
+        item.addEventListener('dragend', () => { draggedItem = null; item.style.display = 'flex'; });
+        item.addEventListener('dragover', e => e.preventDefault());
+        item.addEventListener('drop', function(e) {
+            e.preventDefault();
+            if (this !== draggedItem) {
+                const srcIdx = parseInt(draggedItem.dataset.index);
+                const destIdx = parseInt(this.dataset.index);
+                const moved = categoryOrder.splice(srcIdx, 1)[0];
+                categoryOrder.splice(destIdx, 0, moved);
+                renderCategoryOrder();
+            }
+        });
+    });
+}
+function updateCatLabel(idx, val) {
+    if(categoryOrder[idx]) categoryOrder[idx].label = val;
 }
 
 // ── STEP 5: GENERATE ──
@@ -407,7 +525,7 @@ function renderSummary() {
     document.getElementById('gen-summary').innerHTML = `
         <div class="gs-row"><span class="gs-label">Total Productos</span><span class="gs-value">${products.length}</span></div>
         <div class="gs-row"><span class="gs-label">Con imagen</span><span class="gs-value">${products.filter(p=>p.imageData).length}</span></div>
-        <div class="gs-row"><span class="gs-label">Precio Manual</span><span class="gs-value">${products.filter(p=>p.manualPrice).length}</span></div>
+        <div class="gs-row"><span class="gs-label">Categorías</span><span class="gs-value">${categoryOrder.length}</span></div>
     `;
 }
 
@@ -430,26 +548,29 @@ function generateCatalog() {
     const today = new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' }).toUpperCase();
     const vigencia = `VIGENCIA ${today}`;
 
-    // Group by category
+    // Group by ordered categories
     const groups = {};
+    categoryOrder.forEach(co => { groups[co.label] = []; });
+    
     products.forEach(p => {
-        const cat = p.category || '';
-        if (!groups[cat]) groups[cat] = [];
-        groups[cat].push(p);
+        const catOriginal = p.category || 'Sin Categoría';
+        const orderObj = categoryOrder.find(x => x.original === catOriginal);
+        const finalLabel = orderObj ? orderObj.label : catOriginal;
+        if (!groups[finalLabel]) groups[finalLabel] = [];
+        groups[finalLabel].push(p);
     });
 
     let cardsHtml = '';
-    const sortedCats = Object.keys(groups).sort();
-    
-    sortedCats.forEach(cat => {
-        if (cat && sortedCats.length > 1) {
-            cardsHtml += `<div class="cat-category-header">${esc(cat)}</div>`;
-        }
-        groups[cat].forEach(p => {
+    categoryOrder.forEach(co => {
+        const catLabel = co.label;
+        const prods = groups[catLabel];
+        if (!prods || prods.length === 0) return;
+        
+        if (categoryOrder.length > 1) cardsHtml += `<div class="cat-category-header">${esc(catLabel)}</div>`;
+        
+        prods.forEach(p => {
             const finalPrice = calculateFinalPrice(p);
-            const imgHtml = p.imageData
-                ? `<img class="cat-img" src="${p.imageData}">`
-                : `<div class="cat-placeholder"><span>No disponible</span></div>`;
+            const imgHtml = p.imageData ? `<img class="cat-img" src="${p.imageData}">` : `<div class="cat-placeholder"><span>No disponible</span></div>`;
                 
             let stockHtml = '';
             if (showStock) {
@@ -457,9 +578,8 @@ function generateCatalog() {
                 else if (p.stockStatus === 'order') stockHtml = `<span class="badge-stock badge-order">Bajo pedido</span>`;
             }
 
-            const priceHtml = p.manualPrice 
-                ? `<span class="cat-price-value" style="color:var(--cat-muted)">$_______</span>`
-                : `<span class="cat-price-value">$${finalPrice.toFixed(2)}</span>`;
+            const priceHtml = p.manualPrice ? `<span class="cat-price-value" style="color:var(--cat-muted)">$_______</span>` : `<span class="cat-price-value">$${finalPrice.toFixed(2)}</span>`;
+            const brandHtml = p.brand ? `<div class="cat-brand">${esc(p.brand)}</div>` : '';
 
             cardsHtml += `
                 <div class="cat-card">
@@ -468,6 +588,7 @@ function generateCatalog() {
                         ${showCode && p.code ? `<div class="cat-code">COD: ${esc(p.code)}</div>` : '<div></div>'}
                         ${stockHtml}
                     </div>
+                    ${brandHtml}
                     <div class="cat-name">${esc(p.description)}</div>
                     <div class="cat-price-row">
                         <span class="cat-price-label">${esc(priceLabel)}</span>
@@ -477,11 +598,7 @@ function generateCatalog() {
         });
     });
 
-    const whatsappHtml = whatsapp
-        ? `<a class="cat-whatsapp" href="https://wa.me/${whatsapp}?text=Hola%2C%20me%20interesa%20el%20catálogo%20${encodeURIComponent(title)}" target="_blank">
-            ${esc(waText)}
-          </a>` : '';
-
+    const whatsappHtml = whatsapp ? `<a class="cat-whatsapp" href="https://wa.me/${whatsapp}?text=Hola%2C%20me%20interesa%20el%20catálogo%20${encodeURIComponent(title)}" target="_blank">${esc(waText)}</a>` : '';
     const logoUrl = "https://paocarvajal.github.io/Catalogo-Template-Herramax/1111%20Logo%20HerraMax%20Plus_Dig.jpg";
 
     const fullHtml = `<!DOCTYPE html>
@@ -511,6 +628,7 @@ function generateCatalog() {
         .badge-stock{padding:2px 8px;border-radius:10px;font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;}
         .badge-instock{background:var(--okd);color:var(--ok);}
         .badge-order{background:var(--warnd);color:var(--warn);}
+        .cat-brand{font-size:.7rem;font-weight:700;color:var(--cat-primary);margin-bottom:2px;text-transform:uppercase;letter-spacing:1px;}
         .cat-name{font-size:.82rem;font-weight:600;color:var(--cat-text);line-height:1.3;flex-grow:1;margin-bottom:12px;text-transform:uppercase;}
         .cat-price-row{display:flex;align-items:flex-end;justify-content:space-between;border-top:1px solid var(--cat-border);padding-top:10px;margin-top:auto;}
         .cat-price-label{font-size:.68rem;color:var(--cat-muted);font-weight:600;text-transform:uppercase;line-height:1.2;}
@@ -519,24 +637,12 @@ function generateCatalog() {
         .cat-footer p{font-size:.82rem;color:var(--cat-muted);}
         .cat-whatsapp{display:inline-flex;align-items:center;gap:8px;margin-top:12px;padding:10px 24px;background:#25d366;color:#fff;border-radius:50px;font-weight:700;text-decoration:none;font-size:.9rem;}
         
-        /* Cover and Backcover styles - White background for printing */
-        .cover-page, .backcover-page {
-            background-color: #ffffff;
-            color: #111827;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            padding: 40px;
-        }
+        .cover-page, .backcover-page { background-color: #ffffff; color: #111827; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 40px; }
         .page-break { page-break-after: always; }
         .cover-logo { max-width: 250px; margin-bottom: 40px; }
         .cover-tag { font-size: 0.9rem; font-weight: 700; letter-spacing: 3px; color: var(--cat-primary); margin-bottom: 20px; text-transform: uppercase; border: 1px solid var(--cat-primary); padding: 8px 24px; border-radius: 30px; }
         .cover-title { font-family: 'Outfit', sans-serif; font-size: 4.5rem; font-weight: 900; line-height: 1.1; margin-bottom: 16px; text-transform: uppercase; color: #111827; }
         .cover-subtitle { font-family: 'Outfit', sans-serif; font-size: 1.2rem; font-weight: 500; letter-spacing: 4px; color: #4b5563; text-transform: uppercase; }
-        
         .bc-box { border: 2px solid var(--cat-primary); padding: 12px 40px; margin-bottom: 30px; display: inline-block; }
         .bc-title { font-family: 'Outfit', sans-serif; font-size: 3rem; font-weight: 800; color: var(--cat-primary); text-transform: uppercase; line-height: 1; }
         .bc-subtitle { font-family: 'Outfit', sans-serif; font-size: 1.5rem; font-weight: 700; margin-bottom: 40px; text-transform: uppercase; color: #111827; }
@@ -564,57 +670,35 @@ function generateCatalog() {
     </style>
 </head>
 <body>
-    <!-- PORTADA -->
     <div class="cover-page page-break">
         <img src="${logoUrl}" alt="HerraMax Plus" class="cover-logo">
         <div class="cover-tag">✦ CATÁLOGO EXCLUSIVO MAYORISTAS ✦</div>
         <div class="cover-title">${esc(title)}</div>
         <div class="cover-subtitle">${esc(subtitle)}</div>
     </div>
-
-    <!-- CONTENIDO -->
     <div class="cat-container">
         <div class="cat-header">
             <div class="cat-title">${esc(title)}</div>
             ${subtitle ? `<div class="cat-subtitle">${esc(subtitle)}</div>` : ''}
             <div class="cat-date">${today} · ${products.length} productos</div>
         </div>
-        
         <div class="cat-grid">${cardsHtml}</div>
-        
         <div class="cat-footer">
             <p>${esc(footerNote)}</p>
             <p style="margin-top:4px;">HerraMax Plus · Tu ferretería de confianza</p>
             ${whatsappHtml}
         </div>
     </div>
-
-    <!-- CONTRAPORTADA -->
     <div class="backcover-page" style="page-break-before: always;">
         <img src="${logoUrl}" alt="HerraMax Plus" class="cover-logo" style="max-width: 180px; margin-bottom: 20px;">
-        <div class="bc-box">
-            <div class="bc-title">HERRAMAX PLUS</div>
-        </div>
+        <div class="bc-box"><div class="bc-title">HERRAMAX PLUS</div></div>
         <div class="bc-subtitle">TU MEJOR ALIADO</div>
-        
         <div class="bc-divider"></div>
-        
         <div class="bc-contact-title">CONTACTO</div>
-        <div class="bc-contact-info">
-            ${esc(email)}<br>
-            Tel / WhatsApp: ${esc(whatsapp)}
-        </div>
-        
+        <div class="bc-contact-info">${esc(email)}<br>Tel / WhatsApp: ${esc(whatsapp)}</div>
         <div class="bc-divider"></div>
-        
-        <div class="bc-details">
-            Venta exclusiva mayoreo<br>
-            Precios incluyen IVA<br>
-            Stock disponible inmediato
-        </div>
-        
+        <div class="bc-details">Venta exclusiva mayoreo<br>Precios incluyen IVA<br>Stock disponible inmediato</div>
         <div class="bc-location">${esc(location)}</div>
-        
         <div class="bc-vigencia">${vigencia}</div>
         <div class="bc-copy">© ${new Date().getFullYear()} HerraMax Plus — Todos los derechos reservados</div>
     </div>
@@ -633,9 +717,9 @@ function generateCatalog() {
 
 function loadDemo() {
     products = [];
-    addProduct({code: '500122', description: 'Mezcladora Lavabo Cuello Alto', baseCost: 150, category: 'Grifería'});
-    addProduct({code: '500179', description: 'Mezcladora Lavabo Flexible', baseCost: 180, category: 'Grifería'});
-    addProduct({code: '8860', description: 'Manguerilla para Gas 60cm', baseCost: 35, category: 'Gas', stockStatus: 'order'});
+    addProduct({code: '500122', description: 'Mezcladora Lavabo Cuello Alto', baseCost: 150, category: 'Grifería', brand: 'Solvex Fonthy'});
+    addProduct({code: '500179', description: 'Mezcladora Lavabo Flexible', baseCost: 180, category: 'Grifería', brand: 'Solvex Plus'});
+    addProduct({code: '8860', description: 'Manguerilla para Gas 60cm', baseCost: 35, category: 'Accesorios', stockStatus: 'order', brand: 'Glowels'});
     toast('Demo cargada', 'success');
     goStep(2);
 }
