@@ -463,8 +463,16 @@ function handleImgBankDrop(e) {
     processImgFiles(e.dataTransfer.files);
 }
 async function processImgFiles(files) {
-    const validFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
-    if (validFiles.length === 0) return;
+    const validFiles = Array.from(files).filter(f => {
+        if (f.type && f.type.startsWith('image/')) return true;
+        const n = f.name.toLowerCase();
+        return n.endsWith('.jpg') || n.endsWith('.jpeg') || n.endsWith('.png') || n.endsWith('.webp') || n.endsWith('.gif');
+    });
+    
+    if (validFiles.length === 0) {
+        toast('No se detectaron imágenes válidas', 'error');
+        return;
+    }
 
     if (!currentUser) {
         // Fallback to local base64
@@ -543,7 +551,11 @@ function autoAssignImages() {
             const match = imageBank.find(img => {
                 let nameWithoutExt = img.name.substring(0, img.name.lastIndexOf('.')) || img.name;
                 nameWithoutExt = nameWithoutExt.replace(/_\d+$/, ''); // Remove _1, _2 from duplicates
-                return nameWithoutExt.toLowerCase() === p.code.toLowerCase();
+                
+                let codeA = nameWithoutExt.toLowerCase().replace(/[\s-]/g, '').replace(/^0+/, '');
+                let codeB = p.code.toLowerCase().replace(/[\s-]/g, '').replace(/^0+/, '');
+                
+                return codeA === codeB && codeA !== '';
             });
             if (match) { p.imageData = match.data; assigned++; }
         }
