@@ -455,6 +455,17 @@ function applyBulk(field) {
     toast(`${count} actualizados`, 'success');
 }
 
+function clearAllData() {
+    if (confirm('¿Estás seguro de borrar TODOS los productos e imágenes?')) {
+        products = [];
+        imageBank = [];
+        updateCategoryOrderData();
+        renderProductsEditor();
+        renderImgBank();
+        toast('Datos borrados exitosamente', 'success');
+    }
+}
+
 // ── IMAGE BANK ──
 function handleImgBankSelect(e) { processImgFiles(e.target.files); }
 function handleImgBankDrop(e) {
@@ -498,15 +509,40 @@ async function processImgFiles(files) {
     
     const uploadTasks = validFiles.map(file => {
         return new Promise(async (resolve) => {
+            let handled = false;
+            
+            // Timeout to prevent hanging
+            const timeoutId = setTimeout(() => {
+                if(handled) return;
+                handled = true;
+                console.warn("Cloud upload timeout, falling back to local for", file.name);
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    imageBank.push({ id: nextId++, data: e.target.result, name: file.name });
+                    countLocal++;
+                    resolve();
+                };
+                reader.onerror = resolve;
+                reader.readAsDataURL(file);
+            }, 8000); // 8 seconds timeout per file
+
             try {
                 const path = `catalogs/${currentUser.uid}/images/${Date.now()}_${file.name}`;
                 const ref = storage.ref(path);
                 await ref.put(file);
                 const url = await ref.getDownloadURL();
-                imageBank.push({ id: nextId++, data: url, name: file.name });
-                countCloud++;
-                resolve();
+                
+                if(!handled) {
+                    handled = true;
+                    clearTimeout(timeoutId);
+                    imageBank.push({ id: nextId++, data: url, name: file.name });
+                    countCloud++;
+                    resolve();
+                }
             } catch (err) { 
+                if(handled) return;
+                handled = true;
+                clearTimeout(timeoutId);
                 console.error("Error upload:", err); 
                 // Fallback to local base64 if cloud upload fails
                 const reader = new FileReader();
@@ -526,7 +562,7 @@ async function processImgFiles(files) {
     if (countLocal > 0) {
         toast(`${countCloud} en nube, ${countLocal} locales`, 'warn');
     } else {
-        toast(`${countCloud} imágenes guardadas en la nube`, 'success');
+        toast(`${countCloud} imágenes procesadas`, 'success');
     }
 }
 function renderImgBank() {
