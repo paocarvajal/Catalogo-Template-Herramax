@@ -41,7 +41,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Inter',sans-serif;line-he
 .step-line{width:40px;height:2px;background:var(--bd);margin:0 4px;}
 
 /* Step Panels */
-.step-panel{display:none;min-height:calc(100vh - 160px);padding:24px;overflow-y:auto;}
+.step-panel{display:none;min-height:calc(100vh - 160px);padding:24px;}
 .step-panel.active{display:block;}
 .panel-inner{max-width:1100px;margin:0 auto;}
 .panel-inner.wide{max-width:1400px;}
