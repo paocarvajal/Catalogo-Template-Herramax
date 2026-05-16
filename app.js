@@ -44,7 +44,71 @@ function logout() { auth.signOut(); }
 
 document.addEventListener('DOMContentLoaded', () => {
     updateSteps();
+    loadLocalAutoSave();
 });
+
+function autoSaveLocal() {
+    const state = {
+        products,
+        imageBank,
+        nextId,
+        currentStep,
+        categoryOrder,
+        settings: {
+            title: document.getElementById('d-title').value,
+            subtitle: document.getElementById('d-subtitle').value,
+            priceLabel: document.getElementById('d-price-label').value,
+            footerNote: document.getElementById('d-footer-note').value,
+            cols: document.getElementById('d-cols').value,
+            theme: document.getElementById('d-theme').value,
+            showCode: document.getElementById('d-show-code').value,
+            showStock: document.getElementById('d-show-stock').value,
+            whatsapp: document.getElementById('d-whatsapp').value,
+            waText: document.getElementById('d-wa-text').value,
+            email: document.getElementById('d-email').value,
+            location: document.getElementById('d-location').value
+        }
+    };
+    localStorage.setItem('herramax_autosave', JSON.stringify(state));
+}
+
+function loadLocalAutoSave() {
+    const saved = localStorage.getItem('herramax_autosave');
+    if (saved) {
+        try {
+            const data = JSON.parse(saved);
+            if (data.products && data.products.length > 0) {
+                products = data.products;
+                imageBank = data.imageBank || [];
+                nextId = data.nextId || 1;
+                categoryOrder = data.categoryOrder || [];
+                
+                if (data.settings) {
+                    if(data.settings.title) document.getElementById('d-title').value = data.settings.title;
+                    if(data.settings.subtitle) document.getElementById('d-subtitle').value = data.settings.subtitle;
+                    if(data.settings.priceLabel) document.getElementById('d-price-label').value = data.settings.priceLabel;
+                    if(data.settings.footerNote) document.getElementById('d-footer-note').value = data.settings.footerNote;
+                    if(data.settings.cols) document.getElementById('d-cols').value = data.settings.cols;
+                    if(data.settings.theme) document.getElementById('d-theme').value = data.settings.theme;
+                    if(data.settings.showCode) document.getElementById('d-show-code').value = data.settings.showCode;
+                    if(data.settings.showStock) document.getElementById('d-show-stock').value = data.settings.showStock;
+                    if(data.settings.whatsapp) document.getElementById('d-whatsapp').value = data.settings.whatsapp;
+                    if(data.settings.waText) document.getElementById('d-wa-text').value = data.settings.waText;
+                    if(data.settings.email) document.getElementById('d-email').value = data.settings.email;
+                    if(data.settings.location) document.getElementById('d-location').value = data.settings.location;
+                }
+                
+                // Go to step 2 if we have products, to show the recovered state
+                if (data.currentStep > 1) {
+                    goStep(data.currentStep);
+                }
+                toast('Progreso local restaurado automáticamente', 'success');
+            }
+        } catch(e) {
+            console.error('Error loading autosave', e);
+        }
+    }
+}
 
 function nextStep() {
     if (currentStep < 5) {
@@ -61,6 +125,7 @@ function prevStep() {
 function goStep(step) {
     currentStep = step;
     updateSteps();
+    autoSaveLocal();
 }
 
 function updateSteps() {
@@ -271,7 +336,11 @@ function processPaste() {
         }
     });
     closePasteModal();
-    if (imported > 0) { toast(`${imported} productos importados`, 'success'); nextStep(); }
+    if (imported > 0) { 
+        autoSaveLocal();
+        toast(`${imported} productos importados`, 'success'); 
+        nextStep(); 
+    }
 }
 
 function handleXLSUpload(e) {
@@ -299,7 +368,11 @@ function handleXLSUpload(e) {
                 }
             }
         });
-        if (imported > 0) { toast(`${imported} productos desde Excel`, 'success'); nextStep(); }
+        if (imported > 0) { 
+            autoSaveLocal();
+            toast(`${imported} productos desde Excel`, 'success'); 
+            nextStep(); 
+        }
     };
     reader.readAsArrayBuffer(file);
 }
@@ -330,7 +403,11 @@ function handleXMLUpload(e) {
             
             processed++;
             if (processed === files.length) {
-                if (imported > 0) { toast(`${imported} productos desde XML CFDI`, 'success'); nextStep(); } 
+                if (imported > 0) { 
+                    autoSaveLocal();
+                    toast(`${imported} productos desde XML CFDI`, 'success'); 
+                    nextStep(); 
+                } 
                 else { toast('No se encontraron conceptos', 'error'); }
             }
         };
@@ -353,6 +430,7 @@ function addProduct(data) {
         selected: false
     });
     updateCategoryOrderData();
+    autoSaveLocal();
 }
 
 function addEmptyProduct() {
@@ -410,6 +488,7 @@ function updateProd(id, field, value) {
     if (p) {
         p[field] = value;
         if(field === 'category') updateCategoryOrderData();
+        autoSaveLocal();
     }
 }
 
@@ -417,6 +496,7 @@ function deleteProduct(id) {
     products = products.filter(p => p.id !== id);
     updateCategoryOrderData();
     renderProductsEditor();
+    autoSaveLocal();
 }
 
 function toggleSelect(id) {
@@ -435,6 +515,7 @@ function deleteSelected() {
     products = products.filter(p => !p.selected);
     updateCategoryOrderData();
     renderProductsEditor();
+    autoSaveLocal();
 }
 
 function updateDeleteBtn() {
@@ -452,6 +533,7 @@ function applyBulk(field) {
     });
     if (field === 'category') updateCategoryOrderData();
     renderProductsEditor();
+    autoSaveLocal();
     toast(`${count} actualizados`, 'success');
 }
 
@@ -462,6 +544,7 @@ function clearAllData() {
         updateCategoryOrderData();
         renderProductsEditor();
         renderImgBank();
+        autoSaveLocal();
         toast('Datos borrados exitosamente', 'success');
     }
 }
@@ -559,6 +642,7 @@ async function processImgFiles(files) {
     
     await Promise.all(uploadTasks);
     renderImgBank();
+    autoSaveLocal();
     if (countLocal > 0) {
         toast(`${countCloud} en nube, ${countLocal} locales`, 'warn');
     } else {
@@ -578,7 +662,11 @@ function dropImage(e, prodId) {
     e.preventDefault();
     const imgId = parseInt(e.dataTransfer.getData('text/plain'));
     const img = imageBank.find(i => i.id === imgId);
-    if (img) { updateProd(prodId, 'imageData', img.data); renderProductsEditor(); }
+    if (img) { 
+        updateProd(prodId, 'imageData', img.data); 
+        renderProductsEditor(); 
+        autoSaveLocal();
+    }
 }
 function autoAssignImages() {
     let assigned = 0;
@@ -596,7 +684,11 @@ function autoAssignImages() {
             if (match) { p.imageData = match.data; assigned++; }
         }
     });
-    if (assigned > 0) { renderProductsEditor(); toast(`${assigned} imágenes asignadas auto.`, 'success'); } 
+    if (assigned > 0) { 
+        renderProductsEditor(); 
+        autoSaveLocal();
+        toast(`${assigned} imágenes asignadas auto.`, 'success'); 
+    } 
     else { toast('No se encontraron coincidencias', 'error'); }
 }
 
@@ -639,6 +731,7 @@ function applyBulkUtility() {
     const util = parseFloat(document.getElementById('bulk-utility').value) || 0;
     products.forEach(p => { if (p.selected && !p.manualPrice) p.utilityPct = util; });
     renderPricingTable();
+    autoSaveLocal();
     toast(`Utilidad aplicada`, 'success');
 }
 function updateProdPrice(id, field, value) {
@@ -646,6 +739,7 @@ function updateProdPrice(id, field, value) {
     if (p) {
         if (field === 'utilityPct') p[field] = parseFloat(value) || 0; else p[field] = value;
         renderPricingTable();
+        autoSaveLocal();
     }
 }
 document.getElementById('global-iva').addEventListener('change', renderPricingTable);
@@ -699,12 +793,16 @@ function renderCategoryOrder() {
                 const moved = categoryOrder.splice(srcIdx, 1)[0];
                 categoryOrder.splice(destIdx, 0, moved);
                 renderCategoryOrder();
+                autoSaveLocal();
             }
         });
     });
 }
 function updateCatLabel(idx, val) {
-    if(categoryOrder[idx]) categoryOrder[idx].label = val;
+    if(categoryOrder[idx]) {
+        categoryOrder[idx].label = val;
+        autoSaveLocal();
+    }
 }
 
 // ── STEP 5: GENERATE ──
